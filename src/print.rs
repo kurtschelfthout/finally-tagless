@@ -4,13 +4,12 @@ use std::rc::Rc;
 // "This structure represents a safely precompiled version of a format string and its arguments.
 // This cannot be generated at runtime because it cannot safely be done, so no constructors are given and the fields are private to prevent modification."
 
-// Here I show, by translating Oleg Kiselyov's tagless-final sprintf (aka format! in Rust) interpreter to Rust. https://okmij.org/ftp/tagless-final/course/lecture.pdf
-
+// By translating Oleg Kiselyov's tagless-final sprintf (aka format! in Rust) interpreter to Rust. https://okmij.org/ftp/tagless-final/course/lecture.pdf
 // This demonstrates that it is not only possible, but has extensibility advantages.
 // I demonstrate the extensibility by interpreting the format DSL as a parser.
 
 // The implementation in Rust terms is probably inefficient. I have not benchmarked, but it uses heap allocation, ref counts, closures and cloning liberally.
-// My aim here was just to demonstrate the principle. I'm relatively confident someone more proficient with high-performance rust can do better.
+// My aim here was just to demonstrate the principle.
 
 type Fun<A, B> = Rc<dyn Fn(A) -> B>;
 
@@ -158,7 +157,7 @@ impl FormattingSpec for Scan {
     }
 }
 
-fn scanf<A, B>(str: &str, scan: FScan<A, B>, b: B) -> Option<A> {
+fn sscanf<A, B>(str: &str, scan: FScan<A, B>, b: B) -> Option<A> {
     scan.0((str.to_string(), b)).map(|(a, _)| a)
 }
 
@@ -174,18 +173,17 @@ mod tests {
     // I have not found a way to overload say the + operator for this purpose,
     // because it requires implementing Add for compose which has lots of generic
     // parameters not constrained by the implementing type F::Repr<A,B>.
-    // Either way, a relatively simple set of macros should do the trick here - all the
-    // relevant constraints are enforced in the type system, and doesn't restrict the
-    // extensibility.
-    fn tp1<F: FormattingSpec, A>() -> F::Repr<A, A> {
+    // A relatively simple set of macros should do the trick here - all the
+    // relevant constraints are enforced in the type system.
+    fn fmt1<F: FormattingSpec, A>() -> F::Repr<A, A> {
         F::lit("Hello, ")
     }
 
-    fn tp2<F: FormattingSpec, A>() -> F::Repr<A, Fun<char, A>>
+    fn fmt2<F: FormattingSpec, A>() -> F::Repr<A, Fun<char, A>>
     where
         for<'a> A: 'a,
     {
-        F::compose(F::lit("Hello, world! "), F::char())
+        F::compose(F::lit("Hello, world"), F::char())
     }
 
     fn fmt3<F: FormattingSpec, A>() -> F::Repr<A, Fun<char, Fun<i32, A>>>
@@ -199,23 +197,22 @@ mod tests {
     }
 
     #[test]
-    fn show_tp1() {
+    fn print_fmt1() {
         // Here it is actually hard/annoying to implement something like HasFormattingSpec,
         // because of the generic function type variable A, and the generic associated type.
-        let r = tp1::<Print, _>();
-        let s: String = sprintf(r);
+        let s = sprintf(fmt1::<Print, _>());
         assert_eq!(s, "Hello, ");
     }
 
     #[test]
-    fn show_tp2() {
-        let r = tp2::<Print, _>();
-        let s = sprintf(r)('c');
-        assert_eq!(s, "Hello, world! c");
+    fn print_fmt2() {
+        let r = fmt2::<Print, _>();
+        let s = sprintf(r)('!');
+        assert_eq!(s, "Hello, world!");
     }
 
     #[test]
-    fn show_fmt3() {
+    fn print_fmt3() {
         let r = fmt3::<Print, _>();
         let s = sprintf(r)('C')(67);
 
@@ -223,23 +220,27 @@ mod tests {
     }
 
     #[test]
-    fn scan_tp1() {
-        let r = tp1::<Scan, _>();
-        let scan_r = scanf("Hello, ", r, ());
+    fn scan_fmt1() {
+        let r = fmt1::<Scan, _>();
+        let scan_r = sscanf("Hello, ", r, ());
         assert_eq!(Some(()), scan_r);
+
+        let r = fmt1::<Scan, _>();
+        let scan_r = sscanf("Hello ", r, ());
+        assert_eq!(None, scan_r);
     }
 
     #[test]
-    fn scan_tp2() {
-        let r = tp2::<Scan, _>();
-        let s = scanf("Hello, world! c", r, new_fun(identity));
-        assert_eq!(s, Some('c'));
+    fn scan_fmt2() {
+        let r = fmt2::<Scan, _>();
+        let s = sscanf("Hello, world?", r, new_fun(|x| x));
+        assert_eq!(s, Some('?'));
     }
 
     #[test]
     fn scan_fmt3() {
         let r = fmt3::<Scan, _>();
-        let s = scanf(
+        let s = sscanf(
             "The value of C is 67",
             r,
             new_fun(|c| new_fun(move |i| (c, i))),
@@ -261,8 +262,5 @@ mod tests {
         }
         assert_eq!(a, "123");
         assert_eq!(b, "Hello456");
-        // let a = s.matches(|c| char::is_numeric(c)).next();
-        // assert_eq!(Ok(123), a.unwrap().parse::<i32>());
-        // assert_eq!(b, "Hello");
     }
 }

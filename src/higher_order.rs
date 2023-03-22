@@ -100,13 +100,6 @@ impl Expr {
 
 type Fun<A, B> = Box<dyn Fn(A) -> B>;
 
-// fn fun<A, B, F>(f: F) -> Fun<A, B>
-// where
-//     for<'a> F: Fn(A) -> B + 'a,
-// {
-//     Box::new(f)
-// }
-
 trait ExprSym {
     type Repr<T>;
 
@@ -152,7 +145,6 @@ impl ExprSym for Eval {
 struct View;
 type VarCounter = i32;
 impl ExprSym for View {
-    // type Repr<T> = (i32, String);
     type Repr<T> = Rc<dyn Fn(VarCounter) -> String>;
 
     fn int(i: i32) -> Self::Repr<i32> {

@@ -227,17 +227,14 @@ enum Ctx {
     Neg,
 }
 
-// What's this business with the phantom data?
-// (Should introduce the PushNeg without PhantomData first)
-// It is only needed to implement HasExprSym.
-struct CtxFun<TRepr, T>(Box<dyn Fn(&Ctx) -> TRepr>, PhantomData<T>);
+struct CtxFun<TRepr>(Box<dyn Fn(&Ctx) -> TRepr>);
 
-impl<TRepr, T> CtxFun<TRepr, T> {
+impl<TRepr> CtxFun<TRepr> {
     fn new<F>(f: F) -> Self
     where
         for<'a> F: Fn(&Ctx) -> TRepr + 'a,
     {
-        CtxFun(Box::new(f), PhantomData)
+        CtxFun(Box::new(f))
     }
 }
 
@@ -247,7 +244,7 @@ impl<T: ExprSym> ExprSym for PushNeg<T>
 where
     for<'a> T: 'a,
 {
-    type Repr = CtxFun<T::Repr, T>;
+    type Repr = CtxFun<T::Repr>;
 
     fn lit(i: i32) -> Self::Repr {
         CtxFun::new(move |ctx| match ctx {
@@ -268,16 +265,61 @@ where
     }
 }
 
-// Here I'd love to write just CtxFun<T::Repr>, but then the compiler complains
-// T is not constrained. So we pass on the T into CtxFun as phantomdata.
-impl<T: ExprSym> HasExprSym for CtxFun<T::Repr, T>
+fn exprsym_push_neg0<S: ExprSym>(e: CtxFun<S::Repr>) -> S::Repr {
+    e.0(&Ctx::Pos)
+}
+
+// What's this business with the phantom data?
+// (Should introduce the PushNeg without PhantomData first)
+// It is only needed to implement HasExprSym.
+struct CtxFunPh<TRepr, T>(Box<dyn Fn(&Ctx) -> TRepr>, PhantomData<T>);
+
+impl<TRepr, T> CtxFunPh<TRepr, T> {
+    fn new<F>(f: F) -> Self
+    where
+        for<'a> F: Fn(&Ctx) -> TRepr + 'a,
+    {
+        CtxFunPh(Box::new(f), PhantomData)
+    }
+}
+
+// PhantomData here to get around "unconstrained type parameter T" in trait impl.
+struct PushNegPh<T>(PhantomData<T>);
+impl<T: ExprSym> ExprSym for PushNegPh<T>
 where
     for<'a> T: 'a,
 {
-    type ES = PushNeg<T>;
+    type Repr = CtxFunPh<T::Repr, T>;
+
+    fn lit(i: i32) -> Self::Repr {
+        CtxFunPh::new(move |ctx| match ctx {
+            Ctx::Pos => T::lit(i),
+            Ctx::Neg => T::neg(T::lit(i)),
+        })
+    }
+
+    fn neg(r: Self::Repr) -> Self::Repr {
+        CtxFunPh::new(move |ctx| match ctx {
+            Ctx::Pos => r.0(&Ctx::Neg),
+            Ctx::Neg => r.0(&Ctx::Pos),
+        })
+    }
+
+    fn add(r1: Self::Repr, r2: Self::Repr) -> Self::Repr {
+        CtxFunPh::new(move |ctx| T::add(r1.0(ctx), r2.0(ctx)))
+    }
 }
 
-fn exprsym_push_neg<S: ExprSym<Repr = T>, T: HasExprSym<ES = S>>(e: CtxFun<T, S>) -> T {
+// Here I'd love to write just CtxFun<T::Repr>, but then the compiler complains
+// T is not constrained. So we pass on the T into CtxFun as phantomdata.
+impl<T: ExprSym> HasExprSym for CtxFunPh<T::Repr, T>
+where
+    for<'a> T: 'a,
+{
+    type ES = PushNegPh<T>;
+}
+
+fn exprsym_push_neg<S: ExprSym<Repr = T>, T: HasExprSym<ES = S>>(e: CtxFunPh<T, S>) -> T {
     e.0(&Ctx::Pos)
 }
 
@@ -292,12 +334,17 @@ mod tests {
         )
     }
 
+    fn tf1_pre<E: ExprSym>() -> E::Repr {
+        E::add(E::lit(8), E::neg(E::add(E::lit(1), E::lit(2))))
+    }
+
     fn tf1<E: ExprSym<Repr = T>, T: HasExprSym<ES = E>>() -> T {
         E::add(E::lit(8), E::neg(E::add(E::lit(1), E::lit(2))))
     }
 
     #[test]
     fn eval_equal() {
+        // exprsym_eval(tf1_pre());
         let initial_style = Expr::eval(&ti1());
         let final_style = exprsym_eval(tf1());
 
@@ -335,5 +382,8 @@ mod tests {
 
         assert_eq!(Expr::view(&initial_style), exprsym_view(final_style));
         dbg!(Expr::view(&initial_style));
+
+        let r = tf1_pre::<PushNeg<View>>();
+        dbg!(r.0(&Ctx::Pos));
     }
 }
