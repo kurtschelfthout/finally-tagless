@@ -163,7 +163,6 @@ fn sscanf<A, B>(str: &str, scan: FScan<A, B>, b: B) -> Option<A> {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::identity;
 
     use super::*;
 
