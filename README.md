@@ -2,6 +2,8 @@
 
 A translation of some of the examples in Oleg Kiselyov's [lecture notes](https://okmij.org/ftp/tagless-final/course/lecture.pdf) to Rust.
 
+Companion repo to [Efficient, Extensible, Expressive: Typed Tagless Final Interpreters in Rust](https://getcode.substack.com/p/efficient-extensible-expressive-typed).
+
 Logical order:
 
 - first_order.rs: a simple first order language with addition and negation, with printing and evaluating in initial and final style.
