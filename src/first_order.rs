@@ -111,17 +111,6 @@ impl ExprSym for Eval {
         r1 + r2
     }
 }
-// trick to make rust infer the type, without explicit type arguments.
-// Rust can't infer the type of the trait from the repr, so this provides
-// a link back from the implemented repr type (e.g. i32) to the interpreter
-// type (e.g. Eval).
-trait HasExprSym {
-    type ES: ExprSym;
-}
-
-impl HasExprSym for i32 {
-    type ES = Eval;
-}
 
 fn exprsym_eval(e: i32) -> i32 {
     e
@@ -143,10 +132,6 @@ impl ExprSym for View {
     fn add(r1: Self::Repr, r2: Self::Repr) -> Self::Repr {
         format!("({r1} + {r2})")
     }
-}
-
-impl HasExprSym for String {
-    type ES = View;
 }
 
 fn exprsym_view(e: String) -> String {
@@ -265,61 +250,7 @@ where
     }
 }
 
-fn exprsym_push_neg0<S: ExprSym>(e: &CtxFun<S::Repr>) -> S::Repr {
-    e.0(&Ctx::Pos)
-}
-
-// What's this business with the phantom data?
-// (Should introduce the PushNeg without PhantomData first)
-// It is only needed to implement HasExprSym.
-struct CtxFunPh<TRepr, T>(Box<dyn Fn(&Ctx) -> TRepr>, PhantomData<T>);
-
-impl<TRepr, T> CtxFunPh<TRepr, T> {
-    fn new<F>(f: F) -> Self
-    where
-        for<'a> F: Fn(&Ctx) -> TRepr + 'a,
-    {
-        CtxFunPh(Box::new(f), PhantomData)
-    }
-}
-
-// PhantomData here to get around "unconstrained type parameter T" in trait impl.
-struct PushNegPh<T>(PhantomData<T>);
-impl<T: ExprSym> ExprSym for PushNegPh<T>
-where
-    for<'a> T: 'a,
-{
-    type Repr = CtxFunPh<T::Repr, T>;
-
-    fn lit(i: i32) -> Self::Repr {
-        CtxFunPh::new(move |ctx| match ctx {
-            Ctx::Pos => T::lit(i),
-            Ctx::Neg => T::neg(T::lit(i)),
-        })
-    }
-
-    fn neg(r: Self::Repr) -> Self::Repr {
-        CtxFunPh::new(move |ctx| match ctx {
-            Ctx::Pos => r.0(&Ctx::Neg),
-            Ctx::Neg => r.0(&Ctx::Pos),
-        })
-    }
-
-    fn add(r1: Self::Repr, r2: Self::Repr) -> Self::Repr {
-        CtxFunPh::new(move |ctx| T::add(r1.0(ctx), r2.0(ctx)))
-    }
-}
-
-// Here I'd love to write just CtxFun<T::Repr>, but then the compiler complains
-// T is not constrained. So we pass on the T into CtxFun as phantomdata.
-impl<T: ExprSym> HasExprSym for CtxFunPh<T::Repr, T>
-where
-    for<'a> T: 'a,
-{
-    type ES = PushNegPh<T>;
-}
-
-fn exprsym_push_neg<S: ExprSym<Repr = T>, T: HasExprSym<ES = S>>(e: &CtxFunPh<T, S>) -> T {
+fn exprsym_push_neg<S: ExprSym>(e: &CtxFun<S::Repr>) -> S::Repr {
     e.0(&Ctx::Pos)
 }
 
@@ -334,19 +265,14 @@ mod tests {
         )
     }
 
-    fn tf1_pre<E: ExprSym>() -> E::Repr {
-        E::add(E::lit(8), E::neg(E::add(E::lit(1), E::lit(2))))
-    }
-
-    fn tf1<E: ExprSym<Repr = T>, T: HasExprSym<ES = E>>() -> T {
+    fn tf1<E: ExprSym>() -> E::Repr {
         E::add(E::lit(8), E::neg(E::add(E::lit(1), E::lit(2))))
     }
 
     #[test]
     fn eval_equal() {
-        // exprsym_eval(tf1_pre());
         let initial_style = Expr::eval(&ti1());
-        let final_style = exprsym_eval(tf1());
+        let final_style = tf1::<Eval>();
 
         assert_eq!(initial_style, final_style);
         dbg!(final_style);
@@ -354,19 +280,19 @@ mod tests {
     #[test]
     fn view_equal() {
         let initial_style = Expr::view(&ti1());
-        let final_style = exprsym_view(tf1());
+        let final_style = tf1::<View>();
 
         assert_eq!(initial_style, final_style);
         dbg!(final_style);
     }
 
-    fn tfm1<E: MulExprSym<Repr = T>, T: HasExprSym<ES = E>>() -> T {
+    fn tfm1<E: MulExprSym>() -> E::Repr {
         E::add(E::lit(7), E::neg(E::mul(E::lit(1), E::lit(2))))
     }
 
     #[test]
     fn mul_extensibility() {
-        let final_style = exprsym_eval(tfm1());
+        let final_style = tfm1::<Eval>();
         assert_eq!(5, final_style);
 
         // Type safety without pattern match exhaustiveness checking:
@@ -377,13 +303,10 @@ mod tests {
 
     #[test]
     fn push_neg_equal() {
-        let initial_style = ti1().push_neg();
-        let final_style = exprsym_push_neg(&tf1());
+        let initial_style = ti1().push_neg().view();
+        let final_style = tf1::<PushNeg<View>>().0(&Ctx::Pos);
 
-        assert_eq!(Expr::view(&initial_style), exprsym_view(final_style));
-        dbg!(Expr::view(&initial_style));
-
-        let r = tf1_pre::<PushNeg<View>>();
-        dbg!(r.0(&Ctx::Pos));
+        assert_eq!(initial_style, final_style);
+        dbg!(initial_style);
     }
 }
