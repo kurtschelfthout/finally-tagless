@@ -137,11 +137,11 @@ impl ExprSym for View {
     }
 
     fn neg(r: Self::Repr) -> Self::Repr {
-        format!("(-{})", r)
+        format!("(-{r})")
     }
 
     fn add(r1: Self::Repr, r2: Self::Repr) -> Self::Repr {
-        format!("({} + {})", r1, r2)
+        format!("({r1} + {r2})")
     }
 }
 
@@ -202,13 +202,13 @@ impl Expr {
             Expr::Lit(_) => self,
             Expr::Neg(content) => match content.as_ref() {
                 Expr::Lit(_) => self,
-                Expr::Neg(c) => c.to_owned().push_neg(),
+                Expr::Neg(c) => c.clone().push_neg(),
                 Expr::Add(r1, r2) => Expr::add(
                     Expr::Neg(r1.clone()).push_neg(),
                     Expr::Neg(r2.clone()).push_neg(),
                 ),
             },
-            Expr::Add(r1, r2) => Expr::add(r1.to_owned().push_neg(), r2.to_owned().push_neg()),
+            Expr::Add(r1, r2) => Expr::add(r1.clone().push_neg(), r2.clone().push_neg()),
         }
     }
 }

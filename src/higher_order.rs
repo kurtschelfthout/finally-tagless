@@ -148,7 +148,7 @@ impl ExprSym for View {
     type Repr<T> = Rc<dyn Fn(VarCounter) -> String>;
 
     fn int(i: i32) -> Self::Repr<i32> {
-        Rc::new(move |_| format!("{}", i))
+        Rc::new(move |_| format!("{i}"))
     }
 
     fn add(a: &Self::Repr<i32>, b: &Self::Repr<i32>) -> Self::Repr<i32> {
@@ -165,7 +165,7 @@ impl ExprSym for View {
             format!(
                 "(\\x{} -> {})",
                 count,
-                f(Rc::new(move |_| format!("x{}", count)))(count + 1)
+                f(Rc::new(move |_| format!("x{count}")))(count + 1)
             )
         })
     }
