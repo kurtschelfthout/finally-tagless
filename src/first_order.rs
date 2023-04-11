@@ -265,7 +265,7 @@ where
     }
 }
 
-fn exprsym_push_neg0<S: ExprSym>(e: CtxFun<S::Repr>) -> S::Repr {
+fn exprsym_push_neg0<S: ExprSym>(e: &CtxFun<S::Repr>) -> S::Repr {
     e.0(&Ctx::Pos)
 }
 
@@ -319,7 +319,7 @@ where
     type ES = PushNegPh<T>;
 }
 
-fn exprsym_push_neg<S: ExprSym<Repr = T>, T: HasExprSym<ES = S>>(e: CtxFunPh<T, S>) -> T {
+fn exprsym_push_neg<S: ExprSym<Repr = T>, T: HasExprSym<ES = S>>(e: &CtxFunPh<T, S>) -> T {
     e.0(&Ctx::Pos)
 }
 
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn push_neg_equal() {
         let initial_style = ti1().push_neg();
-        let final_style = exprsym_push_neg(tf1());
+        let final_style = exprsym_push_neg(&tf1());
 
         assert_eq!(Expr::view(&initial_style), exprsym_view(final_style));
         dbg!(Expr::view(&initial_style));
