@@ -6,7 +6,7 @@
 
 // We will consider a similar language as before, but now we'll add the ability to define functions, and apply them (aka call them).
 
-// Let's start again by doing this in the initial style, using a Expr enum.
+// Let's start again by doing this in the initial style, using an Expr enum.
 
 use std::rc::Rc;
 
@@ -38,7 +38,7 @@ impl Expr {
     }
 }
 
-// We know have a way to define functions using Lam, and apply them using App. We also need variables, to define function arguments.
+// We now have a way to define functions using Lam, and apply them using App. We also need variables, to define function arguments.
 
 fn ti1() -> Expr {
     Expr::app(Expr::lam(Expr::var(0)), Expr::int(1))
@@ -111,7 +111,7 @@ trait ExprSym {
     fn app<F: Fn(A) -> B, A, B>(f: Self::Repr<F>, arg: Self::Repr<A>) -> Self::Repr<B>;
 }
 
-// The implementation is of eval practically trivial - like writing the identity function:
+// The implementation of eval is practically trivial - like writing the identity function:
 
 struct Eval;
 impl ExprSym for Eval {
