@@ -16,8 +16,8 @@ type VarId = usize;
 enum Expr {
     Var(VarId),
     Int(i32),
-    Lam(Rc<Expr>),
-    App(Rc<Expr>, Rc<Expr>),
+    Lam(Box<Expr>),
+    App(Box<Expr>, Box<Expr>),
 }
 
 impl Expr {
@@ -30,11 +30,11 @@ impl Expr {
     }
 
     fn lam(body: Expr) -> Expr {
-        Expr::Lam(Rc::new(body))
+        Expr::Lam(Box::new(body))
     }
 
     fn app(f: Expr, arg: Expr) -> Expr {
-        Expr::App(Rc::new(f), Rc::new(arg))
+        Expr::App(Box::new(f), Box::new(arg))
     }
 }
 
@@ -55,7 +55,7 @@ type Env = Vec<Val>;
 #[derive(Clone)]
 enum Val {
     Int(i32),
-    Fun(Rc<dyn Fn(Val) -> Val>),
+    Fun(Env, Expr, fn(Env, Expr, Val) -> Val),
 }
 
 // implementing eval is quite tricky - I had a hard time getting everything to work with the borrow checker.
@@ -67,21 +67,20 @@ enum Val {
 // - Second, looking up variables in the environment is not guaranteed to work either
 
 impl Expr {
-    fn eval(env: Env, expr: Expr) -> Val {
-        match expr {
+    fn eval(self, env: Env) -> Val {
+        match self {
             Expr::Var(id) => env[id].clone(),
             Expr::Int(i) => Val::Int(i),
-            Expr::Lam(e) => Val::Fun(Rc::new(move |x| {
-                let mut envr = env.clone();
-                envr.push(x);
-                Expr::eval(envr, e.as_ref().clone())
-            })),
+            Expr::Lam(e) => Val::Fun(env, *e, |mut env, e, x| {
+                env.push(x);
+                e.eval(env)
+            }),
 
             Expr::App(e1, e2) => {
-                let eval_e1 = Expr::eval(env.clone(), e1.as_ref().clone());
-                let eval_e2 = Expr::eval(env, e2.as_ref().clone());
+                let eval_e1 = e1.eval(env.clone());
+                let eval_e2 = e2.eval(env);
                 match eval_e1 {
-                    Val::Fun(f) => f(eval_e2),
+                    Val::Fun(env, e, f) => f(env, e, eval_e2),
                     _ => panic!("Expected function"),
                 }
             }
@@ -195,12 +194,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "Expected function")]
     fn expr_eval_apply_int() {
-        Expr::eval(vec![], ti2a());
+        ti2a().eval(vec![]);
     }
 
     #[test]
     fn expr_eval_app() {
-        let r = Expr::eval(vec![], ti2b());
+        let r = ti2b().eval(vec![]);
         match r {
             Val::Int(i) => assert_eq!(i, 3),
             _ => panic!("Expected int"),
