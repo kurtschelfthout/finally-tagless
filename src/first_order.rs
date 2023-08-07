@@ -230,20 +230,14 @@ enum Ctx {
 struct CtxFun<TRepr>(Box<dyn Fn(&Ctx) -> TRepr>);
 
 impl<TRepr> CtxFun<TRepr> {
-    fn new<F>(f: F) -> Self
-    where
-        for<'a> F: Fn(&Ctx) -> TRepr + 'a,
-    {
+    fn new(f: impl Fn(&Ctx) -> TRepr + 'static) -> Self {
         CtxFun(Box::new(f))
     }
 }
 
 // PhantomData here to get around "unconstrained type parameter T" in trait impl.
 struct PushNeg<T>(PhantomData<T>);
-impl<T: ExprSym> ExprSym for PushNeg<T>
-where
-    for<'a> T: 'a,
-{
+impl<T: ExprSym + 'static> ExprSym for PushNeg<T> {
     type Repr = CtxFun<T::Repr>;
 
     fn lit(i: i32) -> Self::Repr {
@@ -275,20 +269,14 @@ fn exprsym_push_neg0<S: ExprSym>(e: &CtxFun<S::Repr>) -> S::Repr {
 struct CtxFunPh<TRepr, T>(Box<dyn Fn(&Ctx) -> TRepr>, PhantomData<T>);
 
 impl<TRepr, T> CtxFunPh<TRepr, T> {
-    fn new<F>(f: F) -> Self
-    where
-        for<'a> F: Fn(&Ctx) -> TRepr + 'a,
-    {
+    fn new(f: impl Fn(&Ctx) -> TRepr + 'static) -> Self {
         CtxFunPh(Box::new(f), PhantomData)
     }
 }
 
 // PhantomData here to get around "unconstrained type parameter T" in trait impl.
 struct PushNegPh<T>(PhantomData<T>);
-impl<T: ExprSym> ExprSym for PushNegPh<T>
-where
-    for<'a> T: 'a,
-{
+impl<T: ExprSym + 'static> ExprSym for PushNegPh<T> {
     type Repr = CtxFunPh<T::Repr, T>;
 
     fn lit(i: i32) -> Self::Repr {
@@ -312,10 +300,7 @@ where
 
 // Here I'd love to write just CtxFun<T::Repr>, but then the compiler complains
 // T is not constrained. So we pass on the T into CtxFun as phantomdata.
-impl<T: ExprSym> HasExprSym for CtxFunPh<T::Repr, T>
-where
-    for<'a> T: 'a,
-{
+impl<T: ExprSym + 'static> HasExprSym for CtxFunPh<T::Repr, T> {
     type ES = PushNegPh<T>;
 }
 
