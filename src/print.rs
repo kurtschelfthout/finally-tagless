@@ -13,10 +13,7 @@ use std::rc::Rc;
 
 type Fun<A, B> = Rc<dyn Fn(A) -> B>;
 
-fn new_fun<A, B, F: Fn(A) -> B>(f: F) -> Fun<A, B>
-where
-    for<'a> F: 'a,
-{
+fn new_fun<A, B>(f: impl Fn(A) -> B + 'static) -> Fun<A, B> {
     Rc::new(f)
 }
 
@@ -24,17 +21,12 @@ trait FormattingSpec {
     type Repr<A, B>;
 
     fn lit<A>(s: &str) -> Self::Repr<A, A>;
-    fn int<A>() -> Self::Repr<A, Fun<i32, A>>
-    where
-        for<'a> A: 'a;
-    fn char<A>() -> Self::Repr<A, Fun<char, A>>
-    where
-        for<'a> A: 'a;
-    fn compose<A, B, C>(f: Self::Repr<B, C>, g: Self::Repr<A, B>) -> Self::Repr<A, C>
-    where
-        for<'a> A: 'a,
-        for<'a> B: 'a,
-        for<'a> C: 'a;
+    fn int<A: 'static>() -> Self::Repr<A, Fun<i32, A>>;
+    fn char<A: 'static>() -> Self::Repr<A, Fun<char, A>>;
+    fn compose<A: 'static, B: 'static, C: 'static>(
+        f: Self::Repr<B, C>,
+        g: Self::Repr<A, B>,
+    ) -> Self::Repr<A, C>;
 }
 
 // (String -> A) -> B
@@ -49,30 +41,22 @@ impl FormattingSpec for Print {
         FPrint(new_fun(move |k: Fun<_, _>| k(s.clone())))
     }
 
-    fn int<A>() -> Self::Repr<A, Fun<i32, A>>
-    where
-        for<'a> A: 'a,
-    {
+    fn int<A: 'static>() -> Self::Repr<A, Fun<i32, A>> {
         FPrint(new_fun(move |k: Fun<_, _>| {
             new_fun(move |i: i32| k(i.to_string()))
         }))
     }
 
-    fn char<A>() -> Self::Repr<A, Fun<char, A>>
-    where
-        for<'a> A: 'a,
-    {
+    fn char<A: 'static>() -> Self::Repr<A, Fun<char, A>> {
         FPrint(new_fun(move |k: Fun<_, _>| {
             new_fun(move |c: char| k(c.to_string()))
         }))
     }
 
-    fn compose<A, B, C>(f: Self::Repr<B, C>, g: Self::Repr<A, B>) -> Self::Repr<A, C>
-    where
-        for<'a> A: 'a,
-        for<'a> B: 'a,
-        for<'a> C: 'a,
-    {
+    fn compose<A: 'static, B: 'static, C: 'static>(
+        f: Self::Repr<B, C>,
+        g: Self::Repr<A, B>,
+    ) -> Self::Repr<A, C> {
         FPrint(new_fun(move |k: Fun<_, _>| {
             let f = Rc::clone(&f.0);
             let g = Rc::clone(&g.0);
@@ -120,20 +104,14 @@ impl FormattingSpec for Scan {
         }))
     }
 
-    fn int<A>() -> FScan<A, Fun<i32, A>>
-    where
-        for<'a> A: 'a,
-    {
+    fn int<A>() -> FScan<A, Fun<i32, A>> {
         FScan(new_fun(move |(inp, k): (String, Fun<i32, A>)| {
             let (f, r) = int_from_front(&inp);
             f.map(|f| (k(f), r.to_string()))
         }))
     }
 
-    fn char<A>() -> FScan<A, Fun<char, A>>
-    where
-        for<'a> A: 'a,
-    {
+    fn char<A>() -> FScan<A, Fun<char, A>> {
         FScan(new_fun(move |(inp, k): (String, Fun<char, A>)| {
             if inp.is_empty() {
                 None
@@ -144,12 +122,7 @@ impl FormattingSpec for Scan {
         }))
     }
 
-    fn compose<A, B, C>(a: FScan<B, C>, b: FScan<A, B>) -> FScan<A, C>
-    where
-        for<'a> A: 'a,
-        for<'a> B: 'a,
-        for<'a> C: 'a,
-    {
+    fn compose<A: 'static, B: 'static, C: 'static>(a: FScan<B, C>, b: FScan<A, B>) -> FScan<A, C> {
         FScan(new_fun(move |(inp, f): (String, C)| {
             let r = a.0((inp, f));
             r.and_then(|(vb, inp2)| b.0((inp2, vb)))
@@ -178,17 +151,11 @@ mod tests {
         F::lit("Hello, ")
     }
 
-    fn fmt2<F: FormattingSpec, A>() -> F::Repr<A, Fun<char, A>>
-    where
-        for<'a> A: 'a,
-    {
+    fn fmt2<F: FormattingSpec, A: 'static>() -> F::Repr<A, Fun<char, A>> {
         F::compose(F::lit("Hello, world"), F::char())
     }
 
-    fn fmt3<F: FormattingSpec, A>() -> F::Repr<A, Fun<char, Fun<i32, A>>>
-    where
-        for<'a> A: 'a,
-    {
+    fn fmt3<F: FormattingSpec, A: 'static>() -> F::Repr<A, Fun<char, Fun<i32, A>>> {
         F::compose(
             F::lit("The value of "),
             F::compose(F::char(), F::compose(F::lit(" is "), F::int())),

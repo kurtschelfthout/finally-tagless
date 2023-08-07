@@ -105,9 +105,7 @@ trait ExprSym {
 
     fn int(i: i32) -> Self::Repr<i32>;
     fn add(a: &Self::Repr<i32>, b: &Self::Repr<i32>) -> Self::Repr<i32>;
-    fn lam<A, B, F: Fn(Self::Repr<A>) -> Self::Repr<B>>(f: F) -> Self::Repr<Fun<A, B>>
-    where
-        for<'a> F: 'a;
+    fn lam<A, B>(f: impl Fn(Self::Repr<A>) -> Self::Repr<B> + 'static) -> Self::Repr<Fun<A, B>>;
     fn app<F: Fn(A) -> B, A, B>(f: Self::Repr<F>, arg: Self::Repr<A>) -> Self::Repr<B>;
 }
 
@@ -125,10 +123,9 @@ impl ExprSym for Eval {
         a + b
     }
 
-    fn lam<A, B, F: Fn(Self::Repr<A>) -> Self::Repr<B>>(f: F) -> Self::Repr<Box<dyn Fn(A) -> B>>
-    where
-        for<'a> F: 'a,
-    {
+    fn lam<A, B>(
+        f: impl Fn(Self::Repr<A>) -> Self::Repr<B> + 'static,
+    ) -> Self::Repr<Box<dyn Fn(A) -> B>> {
         Box::new(f)
     }
 
@@ -157,10 +154,7 @@ impl ExprSym for View {
         Rc::new(move |count| format!("({} + {})", a(count), b(count)))
     }
 
-    fn lam<A, B, F: Fn(Self::Repr<A>) -> Self::Repr<B>>(f: F) -> Self::Repr<Fun<A, B>>
-    where
-        for<'a> F: 'a,
-    {
+    fn lam<A, B>(f: impl Fn(Self::Repr<A>) -> Self::Repr<B> + 'static) -> Self::Repr<Fun<A, B>> {
         Rc::new(move |count| {
             format!(
                 "(\\x{} -> {})",
